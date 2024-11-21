@@ -1,0 +1,68 @@
+---
+title: Lista BLP
+author: Tomá Barcellos
+---
+
+```{r}
+library(R.matlab)
+library(tidyverse)
+
+dados <- readMat("demand_data.mat")
+str(dados)
+
+matriz <- cbind(
+  dados$pr,
+  dados$ch,
+  dados$costShifters,
+  dados$share,
+  dados$f,
+  map2(1:10, dados$prodsMarket[, 1], ~rep(.x, each = .y)) %>% 
+    flatten_int()
+)
+
+df_dados <- matriz %>% 
+  as_tibble() %>% 
+  rename(preco = 1, const = 2, carac1 = 3, carac2 = 4, carac3 =5,
+         custo1 = 6, custo2 = 7, share = 8, firma = 9, 
+         mercado = 10)
+
+# plot(df_dados)
+
+```
+
+```{r}
+resumo_mercados <- df_dados %>% 
+  group_by(mercado) %>% 
+  summarise(firmas = length(unique(firma)),
+            produtos = n(),
+            maior_share = max(share), 
+            hhi = sum(share ^ 2))
+
+resumo_variaveis <- df_dados %>% 
+  select(share, const, carac1, carac2, carac3, custo1, custo2, preco) %>% 
+  pivot_longer(c(const, share, carac1, carac2, carac3, custo1, 
+                 custo2, preco)) %>% 
+  group_by(variavel = name) %>% 
+  summarise(minimo = min(value), 
+            mediana = median(value),
+            media = mean(value),
+            maximo = max(value), 
+            desvio_padrao = sd(value))
+```
+
+2.3 Estatísticas de resumo básicas.
+
+Resumo dos mercados
+
+```{r}
+knitr::kable(resumo_mercados)
+```
+
+Resumo variáveis
+
+```{r}
+knitr::kable(resumo_variaveis)
+```
+
+> Add matriz de correlação das variaveis
+
