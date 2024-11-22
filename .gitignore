@@ -4,3 +4,4 @@
 .Ruserdata
 *.pdf
 demand_data.mat
+.DS_Store

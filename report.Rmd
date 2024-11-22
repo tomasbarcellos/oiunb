@@ -6,6 +6,7 @@ author: Tomá Barcellos
 ```{r}
 library(R.matlab)
 library(tidyverse)
+library(ggcorrplot)
 
 dados <- readMat("demand_data.mat")
 str(dados)
@@ -52,6 +53,10 @@ resumo_variaveis <- df_dados %>%
 
 2.3 Estatísticas de resumo básicas.
 
+>2.3 Basic summary statistics
+1. Prepare a table with the following pieces of information for each market: How many firms are active? How many products do they market in total? What fraction of agents bought one of the goods in the sample period?
+2. Prepare a table with summary statistics for market share, characteristics, price, and cost shifters. Please include mean, median, minimum, maximum, and standard deviation. You can inspect these statistics separately for each market, but in what you report, you may pool all markets.
+
 Resumo dos mercados
 
 ```{r}
@@ -64,5 +69,47 @@ Resumo variáveis
 knitr::kable(resumo_variaveis)
 ```
 
-> Add matriz de correlação das variaveis
+Matriz de correlação das variaveis da base.
+
+```{r}
+ggcorrplot(cor(df_dados), lab = TRUE)
+```
+O preço tem correlação forte com as características 1 e 3 e com a
+quantidade/share. 
+As características tem razoável correlação entre si. 
+As características 1 e 2 tem uma correlação muito forte (porém 
+negativa) entre si. Pode ser melhor optar por usar apenas uma das duas 
+ao especificar os modelos
+As vari[aveis de cuto posuem corelação fraca entre e mesmo com o preço. 
+A primeira variável de deslocando do custo possui uma correlação mais 
+forte com os preços e, portanto, deve ser preferida.
+
+2.4. Pure Logit model
+> What statistical assumptions can you make based on this?
+Which of your conditions, based on data provided to you, 
+identify the parameter vector of interest, θ = (α, β)? 
+In other words, what are valid (and relevant) instruments? 
+Is the model over-identified?
+
+Instrumentos relevantes devem passar nos dois teste:
+i) relevância e ii) exclusão. Ou seja, devem possuir boa capacidade 
+de explicar a variável engógena (em nosso caso, preço) e 
+ortogonalidade com as demais variáveis do modelo (como as características dos produtos).
+
+Abaixo imprimimos a correlação entre os deslocadores de custo e o preço.
+
+```{r}
+cor1 <- cor(df_dados$custo1, df_dados$preco)
+cor2 <- cor(df_dados$custo2, df_dados$preco)
+c("Custo 1" = cor1, "Custo 2" = cor2)
+```
+
+A relação entre os possíveis instrumentos e termo de erro da equação 
+estrutural será explorado adiante, após o ajuste dos modelos.
+
+```{r}
+
+```
+
+
 
