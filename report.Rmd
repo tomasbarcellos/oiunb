@@ -1,12 +1,14 @@
 ---
 title: Lista BLP
 author: Tomá Barcellos
+extra_dependencies: ["cancel"]
 ---
 
 ```{r}
 library(R.matlab)
 library(tidyverse)
 library(ggcorrplot)
+
 
 dados <- readMat("demand_data.mat")
 str(dados)
@@ -40,8 +42,8 @@ resumo_mercados <- df_dados %>%
             hhi = sum(share ^ 2))
 
 resumo_variaveis <- df_dados %>% 
-  select(share, const, carac1, carac2, carac3, custo1, custo2, preco) %>% 
-  pivot_longer(c(const, share, carac1, carac2, carac3, custo1, 
+  select(share, carac1, carac2, carac3, custo1, custo2, preco) %>% 
+  pivot_longer(c(share, carac1, carac2, carac3, custo1, 
                  custo2, preco)) %>% 
   group_by(variavel = name) %>% 
   summarise(minimo = min(value), 
@@ -72,8 +74,9 @@ knitr::kable(resumo_variaveis)
 Matriz de correlação das variaveis da base.
 
 ```{r}
-ggcorrplot(cor(df_dados), lab = TRUE)
+ggcorrplot(cor(df_dados[, -c(2, 9:10)]), lab = TRUE)
 ```
+
 O preço tem correlação forte com as características 1 e 3 e com a
 quantidade/share. 
 As características tem razoável correlação entre si. 
@@ -85,11 +88,39 @@ A primeira variável de deslocando do custo possui uma correlação mais
 forte com os preços e, portanto, deve ser preferida.
 
 2.4. Pure Logit model
+
+$$
+u_{ij} = x'_j\beta_j - \alpha p_j + \xi_j + \varepsilon_{ij} 
+$$
+
 > What statistical assumptions can you make based on this?
 Which of your conditions, based on data provided to you, 
 identify the parameter vector of interest, θ = (α, β)? 
 In other words, what are valid (and relevant) instruments? 
 Is the model over-identified?
+
+## Assumptions
+
+Sabemos que:
+
+1. $e_{ij}$ ~ Tem distribuição de valor extremo tipo I: $exp(exp(e))$.
+2. firmas conhecem $\xi$ quando setam preço, 
+mas não sabiam quando setaram as características.
+
+Com base nisso podemos concluir que:
+
+1. Há endogeneidade entre $\xi$ e preço ($p$);
+2. Não há endogeneidade entre as características observadas ($x$) e $\xi$.
+3. Como $\sum_i u_{ij}} = 0$, então, 
+a utilidade média do produto $j$ é 
+$\delta_j = x'\beta - \alpha p_j + \xi_j$
+
+## Instrumentos
+
+Ambas variáveis de custo possuem correlação quase nula com as 
+características dos produtos. No entanto a primeira variável 
+deslocadora do custo parece uns instrumentos melhor porque parece ser 
+mais relevante para explicar o preço (correlação de 0.23 x 0.1).
 
 Instrumentos relevantes devem passar nos dois teste:
 i) relevância e ii) exclusão. Ou seja, devem possuir boa capacidade 
@@ -107,9 +138,69 @@ c("Custo 1" = cor1, "Custo 2" = cor2)
 A relação entre os possíveis instrumentos e termo de erro da equação 
 estrutural será explorado adiante, após o ajuste dos modelos.
 
+> (b) Show how you can invert market shares to obtain the mean utility level δj for each product.
+
+O share do produto $j$ é a soma das pessoas que escolhem o produto $j$ 
+sobre a soma  de todas as pessoas/escolhas.
+
+Ou seja,
+
+> Esse pulo precisa se melhor explicado.
+
+$$
+s_j = \frac{exp(\delta_j)}{\sum_K exp(\delta_k)}
+$$
+
+Transformando em log natural temos que,
+
+$$
+ln(s_j) = \delta_j - ln(\sum_K exp(\delta_k))
+$$
+Temos, por sua vez, que a utilidade do bem externo ($s_0$) é zero.
+Temos assim,
+
+$$
+ln(s_0) = 0 - ln(\sum_K exp(\delta_k))
+$$
+
+subtraindo o share de j do share do bem externo, temos
+
+$$
+ln(s_j) - ln(s_0) = \delta_j - \bcancel{ln(\sum_K exp(\delta_k))} - 0 + \bcancel{ln(\sum_K exp(\delta_k))}
+$$
+Que pode ser reduzida a 
+
+$$
+ln(s_j) - ln(s_0) = \delta_j
+$$
+ou
+
+$$
+\delta_j = ln(s_j) - ln(s_0)
+$$
+Se invertermos a equação básica do modelo,
+
+$$
+\xi_j = \delta_j - x'_j\beta_j + \alpha p_j
+$$
+Substituindo, temos
+
+$$
+\xi_j = ln(s_j) - ln(s_0) - x'_j\beta_j + \alpha p_j
+$$
+
+> (c) Estimate θ = (α,β) and provide standard errors for your estimate. You can try different combinations of instruments, but please use all the different types of instruments that are included or can be constructed from the data (i.e., “BLP instruments”). 
+
 ```{r}
+library(ivreg)
+mod <- ivreg(share ~ preco + carac1 + carac3 + firma + mercado | custo1 + custo2 + carac1 + carac3 + firma + mercado, 
+             data = df_dados %>% mutate(firma = as.factor(firma),
+                                        mercado = as.factor(mercado)))
 
+summary(mod)
+
+broom::tidy(mod)
+broom::glance(mod)
+# broom::augment(mod, data = df_dados)
 ```
-
-
 
