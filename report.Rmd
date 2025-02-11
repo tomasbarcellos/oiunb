@@ -111,10 +111,11 @@ mas não sabiam quando definiram as características.
 Com base nisso podemos concluir que:
 
 1. Há endogeneidade entre $\xi$ e preço ($p$);
-2. Não há endogeneidade entre as características observadas ($x$) e $\xi$.
-3. Como $\sum_i u_{ij}} = 0$, então,
+2. Não há endogeneidade entre as características observadas ($x$) e $\xi$ ou $p$.
+3. Como $\sum_i{ u_{ij}} = 0$, então,
 a utilidade média do produto $j$ é
 $\delta_j = x'\beta - \alpha p_j + \xi_j$
+
 
 ## Instrumentos
 
@@ -126,7 +127,10 @@ mais relevante para explicar o preço (correlação de 0.23 x 0.1).
 Instrumentos relevantes devem passar nos dois teste:
 i) relevância e ii) exclusão. Ou seja, devem possuir boa capacidade
 de explicar a variável engógena (em nosso caso, preço) e
-ortogonalidade com as demais variáveis do modelo (como as características dos produtos).
+ortogonalidade com as demais variáveis do modelo 
+(como as características dos produtos). 
+O gráfico de correlação acima demonstra que ambas variáveis 
+deslocadoras de custo satisfazem essas condições.
 
 Abaixo imprimimos a correlação entre os deslocadores de custo e o preço.
 
@@ -197,15 +201,31 @@ You can try different combinations of instruments, but please use all
 the different types of instruments that are included or can be constructed 
 from the data (i.e., “BLP instruments”).
 
-Primeiro criemos os instrumentos de BLP.
+Primeiro criemos os instrumentos de BLP e de Hausmann.
 
 ```{r}
 df_dados_iv <- df_dados %>% 
   mutate(firma = as.factor(firma),
          mercado = as.factor(mercado)) %>% 
-  group_by(mercado) %>% 
-  mutate(instrumentos_blp = sum(carac1, carac2, carac3) - carac1 - carac2 - carac3)
+  group_by(mercado) %>%
+  # instrumentos de BLP são a média das características dos rivais
+  mutate(soma_carac = carac1 + carac2 + carac3,
+         instrumentos_blp = (sum(soma_carac) -  soma_carac) / (n() - 1)) %>% 
+  group_by(firma) %>%
+  # instrumentos de Hausman são a média dos precos da firma em outros mercados
+  mutate(instrumentos_hausman_preco = (sum(preco) - preco) / (n() - 1))
 ```
+
+Agora verifiquemos se o novo instrumento satifaz as condições
+
+```{r}
+cor3 <- cor(df_dados_iv$instrumentos_blp, df_dados_iv$preco)
+cor4 <- cor(df_dados_iv$instrumentos_hausman_preco, df_dados_iv$preco)
+
+c("Deslocador de custo 1" = cor1, "Deslocador de custo 2" = cor2,
+  "Instrumentos tipo BLP" = cor3, "Instrumento de Hausman" = cor4)
+```
+
 
 Temos portanto, algumas especificações possíveis para o modelo:
 A. Especificações identificadas
@@ -222,15 +242,22 @@ o segundo deslocador de custo
 
 ```{r}
 library(ivreg)
-mod <- ivreg(share ~ preco + carac1 + carac3 + firma + mercado | 
-               instrumentos_blp + custo1 + custo2 + carac1 + carac3 + 
-               firma + mercado,
-             data = df_dados_iv)
+library(fixest)
+instrumentos <- c(
+  "instrumentos_blp + custo1 + custo2",
+  "instrumentos_blp + custo1",
+  "instrumentos_blp + custo2",
+  "instrumentos_blp",
+  "custo1",
+  "custo2"
+)
+formula <- glue::glue(
+  "share ~ carac1 + carac3 | firma + mercado | ",
+  "preco ~ {instrumentos}"
+)
 
-summary(mod)
+modelos <- map(formula, ~feols(as.formula(.x), data = df_dados_iv))
 
-broom::tidy(mod)
-broom::glance(mod)
-# broom::augment(mod, data = df_dados)
+etable(modelos, stage = 1:2)
 ```
 
