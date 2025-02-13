@@ -226,7 +226,6 @@ c("Deslocador de custo 1" = cor1, "Deslocador de custo 2" = cor2,
   "Instrumentos tipo BLP" = cor3, "Instrumento de Hausman" = cor4)
 ```
 
-
 Temos portanto, algumas especificações possíveis para o modelo:
 A. Especificações identificadas
 1. Usando apenas instrumentos de BLP
@@ -243,21 +242,61 @@ o segundo deslocador de custo
 ```{r}
 library(ivreg)
 library(fixest)
+
 instrumentos <- c(
+  "instrumentos_blp + custo1 + custo2 + instrumentos_hausman_preco",
   "instrumentos_blp + custo1 + custo2",
   "instrumentos_blp + custo1",
   "instrumentos_blp + custo2",
   "instrumentos_blp",
+  "instrumentos_blp + custo1 + instrumentos_hausman_preco",
+  "instrumentos_blp + custo2 + instrumentos_hausman_preco",
+  "instrumentos_blp + instrumentos_hausman_preco",
   "custo1",
-  "custo2"
-)
-formula <- glue::glue(
-  "share ~ carac1 + carac3 | firma + mercado | ",
-  "preco ~ {instrumentos}"
+  "custo2",
+  "custo1 + instrumentos_hausman_preco",
+  "custo2 + instrumentos_hausman_preco",
+  "instrumentos_hausman_preco"
 )
 
-modelos <- map(formula, ~feols(as.formula(.x), data = df_dados_iv))
+df_modelos <- tibble(
+  instrumento = instrumentos
+) %>% 
+  mutate(
+    formula = glue::glue(
+      "log(share) ~ carac1 | firma + mercado | ",
+      "preco ~ {instrumentos}"),
+    modelo = map(formula, ~feols(as.formula(.x), data = df_dados_iv)),
+    parametros = map(modelo, broom::tidy),
+    elasticidade = map(parametros, "estimate") %>% 
+      map_dbl(1),
+    medidas = map(modelo, broom::glance)
+  )
 
-etable(modelos, stage = 1:2)
+# etable(df_modelos$modelo, stage = 1:2)
+ggplot(df_modelos, aes(fct_reorder(instrumento, elasticidade),
+                       elasticidade)) + 
+  geom_col(width = 0.1) + 
+  geom_point() + 
+  coord_flip() + 
+  theme_minimal() + 
+  labs(x = "Instrumento", y = "Elasticidade")
 ```
+
+Os resultados do primeiro estágio são
+
+```{r}
+etable(df_modelos$modelo, stage = 1)
+```
+
+Já os resultados do segundo estágio são: 
+
+```{r}
+etable(df_modelos$modelo, stage = 2)
+```
+
+> (c) Estimate θ = (α,β) and provide standard errors for your estimate. You can try different combinations of instruments, but please use all the different types of instruments that are included or can be constructed from the data (i.e., “BLP instruments”).
+
+Tomando o modelo que usa instrumentos de Hausman (modelo 13), temos
+$\alpha$ = -1.682 e $\beta$ = 0.5168.
 
