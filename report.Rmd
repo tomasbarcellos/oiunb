@@ -195,6 +195,24 @@ Substituindo, temos
 $$
 \xi_j = ln(s_j) - ln(s_0) - x'_j\beta_j + \alpha p_j
 $$
+E, por fim,
+
+$$
+ln(s_j) - ln(s_0) = x'_j\beta_j - \alpha p_j + \xi_j
+$$
+
+Precisamos, portanto, criar o share do bem externo
+```{r}
+share_externo <- df_dados %>% 
+  group_by(mercado) %>% 
+  summarise(s_total = sum(share)) %>% 
+  transmute(mercado, s0 = 1 - s_total)
+
+df_dados_delta <- df_dados %>% 
+  left_join(share_externo) %>% 
+  mutate(delta = log(share) - log(s0))
+```
+
 
 > (c) Estimate θ = (α,β) and provide standard errors for your estimate. 
 You can try different combinations of instruments, but please use all 
@@ -204,7 +222,7 @@ from the data (i.e., “BLP instruments”).
 Primeiro criemos os instrumentos de BLP e de Hausmann.
 
 ```{r}
-df_dados_iv <- df_dados %>% 
+df_dados_iv <- df_dados_delta %>% 
   mutate(firma = as.factor(firma),
          mercado = as.factor(mercado)) %>% 
   group_by(mercado) %>%
@@ -264,7 +282,7 @@ df_modelos <- tibble(
 ) %>% 
   mutate(
     formula = glue::glue(
-      "log(share) ~ carac1 | firma + mercado | ",
+      "delta ~ carac1 + carac2 | firma + mercado | ",
       "preco ~ {instrumentos}"),
     modelo = map(formula, ~feols(as.formula(.x), data = df_dados_iv)),
     parametros = map(modelo, broom::tidy),
@@ -297,6 +315,51 @@ etable(df_modelos$modelo, stage = 2)
 
 > (c) Estimate θ = (α,β) and provide standard errors for your estimate. You can try different combinations of instruments, but please use all the different types of instruments that are included or can be constructed from the data (i.e., “BLP instruments”).
 
-Tomando o modelo que usa instrumentos de Hausman (modelo 13), temos
-$\alpha$ = -1.682 e $\beta$ = 0.5168.
+Tomando o modelo que usa como insturmento apenas  a primeira variável 
+deslocadora de custo (modelo 9), temos
+$\alpha$ = -2.646 e $\beta$ = [2.410, 1.965].
+
+Foram incluídos efeitos fixos para mercados e firmas.
+
+> Estimate and present the matrix of cross- and own-price elasticities for market 10 based on your model and parameter estimates
+
+A matriz de elasticidades cruzadas e próprias é dada pela 
+formula que segue:
+
+$$
+\eta_{jkt} = \cases{-\alpha p_{jt}(1-s_{jt}) 
+  \text{, se } k = j \\ 
+  \alpha p_{jt}(s_{kt}) \text{, caso contrário}}
+$$
+
+Assim, temos
+
+```{r}
+shares_merc10 <- df_dados_iv %>% 
+  filter(mercado == 10) %>% 
+  ungroup() %>% 
+  select(share) %>% 
+  as.matrix()
+
+precos_merc10 <- df_dados_iv %>% 
+  filter(mercado == 10) %>% 
+  ungroup() %>% 
+  select(preco) %>% 
+  as.matrix(nrow = 1)
+
+alpha <- -2.646
+elas_propria <- alpha * precos_merc10 * 
+  (1 - shares_merc10)
+
+elas_cruzada <- -alpha * precos_merc10 *
+  shares_merc10
+
+elasticidade <- purrr::map(seq_along(elas_propria),
+                               ~elas_cruzada) %>% 
+  reduce(cbind)
+
+diag(elasticidade) <- elas_propria
+elasticidade
+```
+
 
