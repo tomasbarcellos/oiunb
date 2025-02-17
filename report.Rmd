@@ -40,7 +40,8 @@ resumo_mercados <- df_dados %>%
   summarise(firmas = length(unique(firma)),
             produtos = n(),
             maior_share = max(share),
-            hhi = sum(share ^ 2))
+            porcao_1_compra = sum(share),
+            hhi = sum((share/porcao_1_compra) ^ 2))
 
 resumo_variaveis <- df_dados %>%
   select(share, carac1, carac2, carac3, custo1, custo2, preco) %>%
@@ -286,19 +287,25 @@ df_modelos <- tibble(
       "preco ~ {instrumentos}"),
     modelo = map(formula, ~feols(as.formula(.x), data = df_dados_iv)),
     parametros = map(modelo, broom::tidy),
-    elasticidade = map(parametros, "estimate") %>% 
+    alpha = map(parametros, "estimate") %>% 
       map_dbl(1),
-    medidas = map(modelo, broom::glance)
+    medidas = map(modelo, broom::glance),
+    erros = map(modelo, "residuals"),
+    hortog_erro_z = map2(instrumentos, erros, ~{
+      z <- str_split_1(.x, " \\+ ") 
+      cor(.y, df_dados_iv[, z])
+      # z
+    })
   )
 
 # etable(df_modelos$modelo, stage = 1:2)
-ggplot(df_modelos, aes(fct_reorder(instrumento, elasticidade),
-                       elasticidade)) + 
+ggplot(df_modelos, aes(fct_reorder(instrumento, alpha),
+                       alpha)) + 
   geom_col(width = 0.1) + 
   geom_point() + 
   coord_flip() + 
   theme_minimal() + 
-  labs(x = "Instrumento", y = "Elasticidade")
+  labs(x = "Instrumento", y = expression(alpha))
 ```
 
 Os resultados do primeiro estágio são
@@ -312,6 +319,22 @@ Já os resultados do segundo estágio são:
 ```{r}
 etable(df_modelos$modelo, stage = 2)
 ```
+
+A hotogonalidade entre Z e $\epsilon$ pode ser vista abaixo
+
+```{r}
+df_modelos %>% 
+         mutate(nome_inst = map(hortog_erro_z, colnames),
+                hortog_erro_z = map(hortog_erro_z,
+                                    as.numeric)) %>% unnest(c(nome_inst, hortog_erro_z)) %>% 
+  ggplot(aes(as.factor(as.numeric(as.factor(instrumento))),
+             hortog_erro_z, col = nome_inst)) + 
+  geom_point() + 
+  coord_flip() + 
+  theme_minimal() + 
+  labs(x = "Modelo", y = expression(cor(epsilon, z)))
+```
+
 
 > (c) Estimate θ = (α,β) and provide standard errors for your estimate. You can try different combinations of instruments, but please use all the different types of instruments that are included or can be constructed from the data (i.e., “BLP instruments”).
 
@@ -361,5 +384,49 @@ elasticidade <- purrr::map(seq_along(elas_propria),
 diag(elasticidade) <- elas_propria
 elasticidade
 ```
+
+> 3. In the next question, we are going to free up the 
+substitution pattern by introducing random coefficients as 
+in BLP. 
+Alternatively, we could think about implementing nested logit, 
+the pure characteristics model, or multinomial probit. 
+Would they be appealing in this setting? Why or why not?
+
+O **modelo aninhado** (nested logit) parece não ter 
+aderência com o problema  apresentado até agora, principalmente porque ele exige a criação de ninhos por parte do pesquisador.
+Esse processo pressupõe o 
+entendimento do mercado e de informações que não foram fornecidas.
+
+Probit muntinominal....
+
+Características puras apreenta os padrões irrealistas de 
+substitutibilidade que já foram apresentados e discutidos acim.
+
+> (a) What is the contraction mapping used here for the inner 
+loop? Is there a way to reduce the computational burden from the 
+contraction mapping? (Hint: take a look at page 4 of the appendix 
+to Nevo (2000).) In the following, make sure to set the “inner 
+tolerance” level for the contraction mapping very tight, in your 
+final run ideally on the order of 10−14. 
+
+O contraction mapping é um procedimento necessário para contornar 
+o fato de que a introdução de agentes heterogenios impede o 
+uso da alternativa anterior para identificação do $\delta$ 
+(usar o log do share do produto sobre share externo).
+
+Agora é necessário encontrar numericamente um $delta$ que, 
+dado $\Sigma$ e $\Pi$, que resolva:
+
+$$
+s_{jt|} = \sum{w_{it} .\frac{
+exp[\delta_{jt} + u_{ijt}(\Sigma, \Pi)]
+}
+{1 + \sum_{k \in J_t}{exp[\delta_{kt} + u_{ikt}(\Sigma, \Pi)]}}}
+\text{ para todo } j \in J_t
+$$
+
+
+
+
 
 
